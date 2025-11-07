@@ -2,85 +2,97 @@ import random
 import streamlit as st
 
 
-st.title("� 간단 덧셈/뺄셈 연습")
-st.write("3문제를 연속으로 풀고, 몇 문제를 맞혔는지 알려줍니다.")
+st.set_page_config(page_title="끝말잇기 게임", layout="centered")
+st.title("끝말잇기 게임 🎯")
+st.write("제가 먼저 단어를 제시합니다 — 제시된 단어의 마지막 글자와 같은 글자로 시작하는 단어를 입력해 주세요.")
 
 
-# --- 초기화 -------------------------------------------------
-if "q_index" not in st.session_state:
-    st.session_state.q_index = 0
-    st.session_state.score = 0
-    st.session_state.current_question = None
-    st.session_state.current_answer = None
-    st.session_state.last_feedback = ""
+# --- 단어 목록 (간단한 샘플) ---------------------------------
+WORD_LIST = [
+    "사과", "학교", "자동차", "나무", "우유", "바나나", "나비", "이름", "먹이", "이사",
+    "사랑", "공원", "노트", "트럭", "컵", "피자", "자전거", "게임", "음악", "기차",
+    "한국", "국가", "가방", "방울", "울타리", "리본", "본인", "인형", "형광등", "등대"
+]
 
 
-def new_question():
-    """새로운 문제를 생성해 세션에 저장한다."""
-    a = random.randint(0, 20)
-    b = random.randint(0, 20)
-    op = random.choice(["+", "-"])
-    # 뺄셈일 때 음수가 되지 않도록 순서 조정
-    if op == "-" and a < b:
-        a, b = b, a
-    q_text = f"{a} {op} {b}"
-    ans = a + b if op == "+" else a - b
-    st.session_state.current_question = q_text
-    st.session_state.current_answer = ans
+# --- 세션 상태 초기화 -----------------------------------------
+if "current_word" not in st.session_state:
+    st.session_state.current_word = random.choice(WORD_LIST)
+    st.session_state.history = [st.session_state.current_word]
+    st.session_state.used_words = set(st.session_state.history)
+    st.session_state.feedback = ""
 
 
-# 문제 시작 조건
-if st.session_state.current_question is None:
-    new_question()
+def restart_game():
+    st.session_state.current_word = random.choice(WORD_LIST)
+    st.session_state.history = [st.session_state.current_word]
+    st.session_state.used_words = set(st.session_state.history)
+    st.session_state.feedback = ""
+    st.experimental_rerun()
 
 
-st.write(f"문제 {st.session_state.q_index + 1} / 3")
-st.markdown(f"### {st.session_state.current_question} = ?")
+def first_char(word: str) -> str:
+    return word[0]
 
-with st.form(key="answer_form"):
-    user_answer = st.number_input("정답을 입력하세요", step=1, value=0)
+
+def last_char(word: str) -> str:
+    return word[-1]
+
+
+st.markdown(f"### 지금 단어: **{st.session_state.current_word}**")
+
+with st.form(key="word_form"):
+    user_word = st.text_input("단어를 입력하세요", value="")
     submitted = st.form_submit_button("제출")
 
 if submitted:
-    try:
-        ua = int(user_answer)
-    except Exception:
-        ua = None
-
-    if ua == st.session_state.current_answer:
-        st.session_state.score += 1
-        st.session_state.last_feedback = "정답입니다 ✅"
-    else:
-        st.session_state.last_feedback = (
-            f"틀렸습니다 ❌ 정답은 {st.session_state.current_answer} 입니다."
+    w = user_word.strip()
+    if not w:
+        st.session_state.feedback = "단어를 입력해 주세요."
+    elif w in st.session_state.used_words:
+        st.session_state.feedback = f"'{w}' 는 이미 사용된 단어입니다. 다른 단어를 입력하세요."
+    elif first_char(w) != last_char(st.session_state.current_word):
+        st.session_state.feedback = (
+            f"끝말이 맞지 않습니다. 현재 단어의 마지막 글자 '{last_char(st.session_state.current_word)}' 로 시작해야 합니다."
         )
-
-    st.session_state.q_index += 1
-
-    if st.session_state.q_index < 3:
-        # 다음 문제 준비
-        new_question()
-        # 페이지가 다시 렌더링되며 다음 문제가 보입니다.
-        st.experimental_rerun()
     else:
-        # 3문제 완료
-        st.success(f"완료! 총 {st.session_state.score} / 3 문제 정답")
-        st.info(st.session_state.last_feedback)
+        # 사용자의 유효한 단어를 히스토리에 추가
+        st.session_state.history.append(w)
+        st.session_state.used_words.add(w)
 
-        if st.button("다시하기"):
-            # 상태 초기화 후 새 문제 생성
-            st.session_state.q_index = 0
-            st.session_state.score = 0
-            st.session_state.current_question = None
-            st.session_state.current_answer = None
-            st.session_state.last_feedback = ""
-            new_question()
-            st.experimental_rerun()
+        # 컴퓨터(앱)가 이어갈 수 있는 단어를 WORD_LIST에서 찾음
+        needed = last_char(w)
+        candidates = [x for x in WORD_LIST if first_char(x) == needed and x not in st.session_state.used_words]
+        if candidates:
+            comp = random.choice(candidates)
+            st.session_state.history.append(comp)
+            st.session_state.used_words.add(comp)
+            st.session_state.current_word = comp
+            st.session_state.feedback = f"올바릅니다 ✅ 제가 '{comp}' 라고 이어갈게요. 다음은 '{last_char(comp)}' 로 시작하는 단어를 입력해 주세요."
+        else:
+            # 이어갈 단어가 없음 -> 사용자가 승리
+            st.session_state.current_word = w
+            st.session_state.feedback = f"좋아요! 제가 이어갈 단어를 찾지 못했습니다 — 당신의 승리입니다 🏆"
 
-        # 이후 아래의 입력 폼이나 안내는 보이지 않도록 중단
-        st.stop()
+
+col1, col2 = st.columns([1, 1])
+with col1:
+    if st.button("새로 시작"):
+        restart_game()
+with col2:
+    if st.button("초기 단어 재설정"):
+        # 현재 게임을 유지하되 시작 단어만 새로 뽑음
+        st.session_state.current_word = random.choice(WORD_LIST)
+        st.session_state.history = [st.session_state.current_word]
+        st.session_state.used_words = set(st.session_state.history)
+        st.session_state.feedback = ""
+        st.experimental_rerun()
 
 
-if st.session_state.last_feedback:
-    st.write(st.session_state.last_feedback)
+if st.session_state.feedback:
+    st.info(st.session_state.feedback)
+
+st.markdown("---")
+st.subheader("지금까지의 흐름")
+st.write(" → ".join(st.session_state.history))
 
